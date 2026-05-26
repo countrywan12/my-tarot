@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>🔮 阁楼塔罗 v3.0：全息立体 3D 占卜舞台</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+  
+  <style>
+    body { font-family: 'Georgia', serif; text-align: center; background: #06060b; color: #e5c158; margin: 0; padding: 15px; overflow-x: hidden; }
+    h1 { color: #e5c158; text-shadow: 0 0 15px rgba(229,193,88,0.6); font-size: 2.2rem; margin: 5px 0; }
+    .container { max-width: 1000px; margin: auto; }
+    
+    /* 控制面板 */
+    .control-panel { margin: 15px 0; display: flex; justify-content: center; gap: 15px; align-items: center; flex-wrap: wrap; }
+    select { background: #12121f; border: 1px solid #e5c158; color: #e5c158; padding: 10px 15px; border-radius: 20px; font-size: 0.95rem; outline: none; cursor: pointer; }
+    input[type="text"] { background: #12121f; border: 1px solid #e5c158; color: #fff; padding: 12px 20px; width: 40%; border-radius: 25px; font-size: 0.95rem; outline: none; text-align: center; }
+    #confirm-btn { background: linear-gradient(135deg, #e5c158 0%, #b38f2e 100%); border: none; color: #0b0b12; padding: 12px 25px; border-radius: 25px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 10px rgba(229,193,88,0.3); }
+    #confirm-btn:hover { transform: scale(1.05); box-shadow: 0 6px 15px rgba(229,193,88,0.5); }
+
+    /* 工作区布局 */
+    .workspace { display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 10px; }
+    
+    /* 左侧摄像头（缩小作为辅助检测） */
+    #video-container { position: relative; width: 240px; height: 180px; border: 1px solid rgba(229,193,88,0.4); border-radius: 12px; overflow: hidden; background: #000; }
+    video { transform: rotateY(180deg); width: 100%; height: 100%; object-fit: cover; }
+    
+    /* PM体验设计：手势状态提示灯 */
+    #gesture-status { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); color: #00ffcc; font-size: 0.75rem; padding: 4px 0; }
+
+    /* ✨ 右侧：复刻效果图的 3D 全息占卜舞台 */
+    #stage-3d { 
+      position: relative; 
+      width: 600px; 
+      height: 320px; 
+      background: radial-gradient(circle at 50% 80%, #151226 0%, #06060b 70%);
+      border-radius: 15px;
+      border: 1px solid rgba(229,193,88,0.2);
+      box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+      perspective: 1000px; 
+      overflow: hidden;
+    }
+
+    /* ✨ 底部旋转流光法阵效果 */
+    .magic-circle {
+      position: absolute;
+      width: 450px;
+      height: 450px;
+      left: 75px;
+      bottom: -260px;
+      border: 2px dashed rgba(229,193,88,0.2);
+      border-radius: 50%;
+      transform: rotateX(75deg);
+      box-shadow: 0 0 30px rgba(229,193,88,0.1), inset 0 0 30px rgba(229,193,88,0.1);
+      animation: spin 20s linear infinite;
+      pointer-events: none;
+    }
+    .magic-circle::after {
+      content: '';
+      position: absolute;
+      top: 10px; bottom: 10px; left: 10px; right: 10px;
+      border: 1px solid rgba(229,193,88,0.15);
+      border-radius: 50%;
+    }
+    @keyframes spin { 0% { transform: rotateX(75deg) rotate(0deg); } 100% { transform: rotateX(75deg) rotate(360deg); } }
+
+    /* ✨ 3D 卡牌容器堆叠层 */
+    #cards-container {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      transform-style: preserve-3d;
+      transition: transform 0.5s;
+    }
+
+    /* ✨ 古典复古卡牌基础样式 */
+    .card-3d {
+      position: absolute;
+      width: 95px;
+      height: 160px;
+      left: 252px; /* 居中定位 (600/2 - 95/2) */
+      top: 50px;
+      transform-style: preserve-3d;
+      transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
+      cursor: pointer;
+    }
+
+    /* 卡牌背面（精美神秘星轨） */
+    .card-back {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: repeating-linear-gradient(45deg, #13101c, #13101c 5px, #221a35 5px, #221a35 10px);
+      border: 2px solid #b38f2e;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+      backface-visibility: hidden;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-size: 1.5rem;
+      color: rgba(229,193,88,0.4);
+    }
+
+    /* 卡牌正面（金丝白底古典复古感） */
+    .card-front {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(135deg, #1c192d 0%, #0d0b14 100%);
+      border: 2px solid #e5c158;
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
+      backface-visibility: hidden;
+      transform: rotateY(180deg); 
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 5px;
+      box-sizing: border-box;
+    }
+
+    .card-front .name { font-size: 1.1rem; font-weight: bold; color: #e5c158; letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 5px rgba(229,193,88,0.5); }
+    .card-front .tag { font-size: 0.7rem; color: #a49fb6; border-top: 1px dashed rgba(229,193,88,0.3); padding-top: 4px; width: 85%; text-align: center; }
+
+    /* ✨ 洗牌乱序抖动动画 */
+    @keyframes shuffle3d {
+      0% { transform: translate3d(0,0,0) rotateY(0deg); }
+      50% { transform: translate3d(var(--x), var(--y), var(--z)) rotate(var(--r)); }
+      100% { transform: translate3d(0,0,0) rotateY(0deg); }
+    }
+    .shuffling-card { animation: shuffle3d 0.25s infinite ease-in-out; }
+
+    /* 解牌输出区 */
+    #result-box { margin-top: 20px; padding: 25px; background: rgba(18, 18, 31, 0.85); border-radius: 15px; border: 1px dashed #e5c158; min-height: 100px; text-align: left; max-width: 880px; margin-left: auto; margin-right: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+    #interpretation { color: #d1cbd4; line-height: 1.8; font-size: 1.05rem; }
+    .section-title { color: #e5c158; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-left: 3px solid #e5c158; padding-left: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔮 阁楼塔罗 <span style="font-size: 1.1rem; vertical-align: middle; color: #b38f2e; letter-spacing: 1px;">v3.0 全息立体舞台版</span></h1>
+    <p style="color: #a49fb6; margin: 2px 0 10px 0; font-size: 0.9rem;">—— 破空布阵，复刻命运的 3D 弧形回响 ——</p>
+    
+    <div class="control-panel">
+      <select id="spread-select" onchange="initDeckVisual()">
+        <option value="four_cards">🔮 经典时空牌阵 (1张切牌 + 3张时空牌)</option>
+        <option value="single_card">🃏 每日一卜启示 (单张纯粹指引)</option>
+        <option value="choice_two">⚖️ 抉择十字牌阵 (两难方案二选一)</option>
+      </select>
+      <input type="text" id="user-question" placeholder="在此凝练你的困惑（如：六月面试冲刺，能顺利拿到目标Offer吗？）...">
+      <button id="confirm-btn" onclick="handleButtonClick()">确认启示</button>
+    </div>
+
+    <div class="workspace">
+      <div id="video-container">
+        <video id="input_video" autoplay playsinline></video>
+        <div id="gesture-status">📷 正在启动命运之眼...</div>
+      </div>
+      
+      <div id="stage-3d">
+        <div class="magic-circle"></div> 
+        <div id="cards-container"></div>
+      </div>
+    </div>
+
+    <div id="result-box">
+      <div id="interpretation">请在上方选定牌阵并输入困惑，随后点击“确认启示”或划动手掌启封命运...</div>
+    </div>
+  </div>
+
+  <script>
+    // ==================== DeepSeek 核心产品配置 ====================
+    const DEEPSEEK_API_KEY = 'sk-eb537ab0a60f420889d225fc6dbae256'; 
+    
+    const cardsContainer = document.getElementById('cards-container');
+    const spreadSelect = document.getElementById('spread-select');
+    const interpretationDisplay = document.getElementById('interpretation');
+    const questionInput = document.getElementById('user-question');
+    const gestureStatus = document.getElementById('gesture-status');
+    
+    const tarotDeck = ["愚者", "魔术师", "女祭司", "皇后", "皇帝", "教皇", "恋人", "战车", "力量", "隐士", "命运之轮", "正义", "倒吊人", "死神", "节制", "恶魔", "高塔", "星星", "月亮", "太阳", "审判", "世界"];
+    
+    // 修复：必须在最上方定义控制锁，防止加载时状态错乱
+    let canDraw = true;
+    let lastY = 0; 
+
+    // ==================== ✨ 复刻动态 3D 洗牌视觉效果 ====================
+    function initDeckVisual() {
+        cardsContainer.innerHTML = '';
+        interpretationDisplay.innerText = "阵法已就绪。静心冥想，点击“确认启示”或凌空挥手解印...";
+        const currentSpread = spreadSelect.value;
+        
+        let cardCount = currentSpread === 'single_card' ? 8 : 12;
+        
+        for (let i = 0; i < cardCount; i++) {
+            const card = document.createElement('div');
+            card.className = 'card-3d shuffling-card';
+            
+            card.style.setProperty('--x', `${(Math.random() - 0.5) * 60}px`);
+            card.style.setProperty('--y', `${(Math.random() - 0.5) * 20}px`);
+            card.style.setProperty('--z', `${(Math.random() - 0.5) * 40}px`);
+            card.style.setProperty('--r', `${(Math.random() - 0.5) * 15}deg`);
+            
+            card.style.transform = `translate3d(${i * 0.5}px, ${i * -0.3}px, ${i * -2}px)`;
+            card.innerHTML = `<div class="card-back">🔮</div>`;
+            cardsContainer.appendChild(card);
+        }
+    }
+
+    // ==================== ✨ 核心布阵：3D 弧形展开 + 翻牌动画 ====================
+    function executeDraw() {
+        const currentSpread = spreadSelect.value;
+        const shuffled = [...tarotDeck].sort(() => Math.random() - 0.5);
+        cardsContainer.innerHTML = ''; 
+        
+        let drawnCards = [];
+        let systemPrompt = "";
+        const question = questionInput.value.trim() ? questionInput.value : "我未来的命运指引";
+
+        if (currentSpread === 'four_cards') {
+            drawnCards = [
+                { name: shuffled[0], tag: "切牌 (现状)" },
+                { name: shuffled[1], tag: "过去因缘" },
+                { name: shuffled[2], tag: "现在局势" },
+                { name: shuffled[3], tag: "未来指向" }
+            ];
+            systemPrompt = `你是一位古典塔罗占卜大师。问卜者的问题是：“${question}”。本次采用经典综合时空牌阵，抽出的四张牌分别是：
+1. 【切牌/核心现状】：${drawnCards[0].name}
+2. 【过去因缘】：${drawnCards[1].name}
+3. 【现在局势】：${drawnCards[2].name}
+4. 【未来指向】：${drawnCards[3].name}
+请对这四张牌的组合进行全面而有深度的逻辑关联解读。多用文学隐喻，直击痛点。请严格分为三段输出，每段开头加上【】标签，例如：【核心切牌与潜意识状态】、【过去、现在、未来的时间轴流转】、【命运指引与高维建议】。`;
+        } else if (currentSpread === 'single_card') {
+            drawnCards = [{ name: shuffled[0], tag: "核心启示" }];
+            systemPrompt = `你是一位古典塔罗占卜大师。问卜者的问题是：“${question}”。他抽到了单张核心启示牌：【${drawnCards[0].name}】。请针对他的困惑，给出一段150字左右的一针见血、高冷优雅的解牌与行动建议。`;
+        } else if (currentSpread === 'choice_two') {
+            drawnCards = [
+                { name: shuffled[0], tag: "方案 A 现状" },
+                { name: shuffled[1], tag: "方案 A 结果" },
+                { name: shuffled[2], tag: "方案 B 现状" },
+                { name: shuffled[3], tag: "方案 B 结果" }
+            ];
+            systemPrompt = `你是一位古典塔罗占卜大师。问卜者正处于两难抉择中，他的核心困惑是：“${question}”。本次采用二选一十字牌阵，抽出的四张牌分别是：
+- 方案 A (选择路径一) —— 现状牌：${drawnCards[0].name}，结果牌：${drawnCards[1].name}
+- 方案 B (选择路径二) —— 现状牌：${drawnCards[2].name}，结果牌：${drawnCards[3].name}
+请对这两个方案的前景进行透彻的对比解剖，给出清醒、不和稀泥的决策判断。请严格分为三段输出，每段开头加上【】标签，例如：【方案 A 路径推演】、【方案 B 路径推演】、【占卜师的终极裁决】。`;
+        }
+
+        const total = drawnCards.length;
+        drawnCards.forEach((card, index) => {
+            const cardEl = document.createElement('div');
+            cardEl.className = 'card-3d';
+            
+            cardEl.innerHTML = `
+                <div class="card-back">🔮</div>
+                <div class="card-front">
+                    <div class="name">${card.name}</div>
+                    <div class="tag">${card.tag}</div>
+                </div>
+            `;
+            cardsContainer.appendChild(cardEl);
+
+            setTimeout(() => {
+                let rotateY = 0;
+                let translateX = 0;
+                let translateZ = 0;
+
+                if (total > 1) {
+                    const mid = (total - 1) / 2;
+                    const offset = index - mid;
+                    rotateY = offset * 18;       
+                    translateX = offset * 115;   
+                    translateZ = -Math.abs(offset) * 25; 
+                } else {
+                    translateZ = 30;
+                }
+
+                cardEl.style.transform = `translate3d(${translateX}px, 20px, ${translateZ}px) rotateY(${rotateY}deg)`;
+                
+                setTimeout(() => {
+                    cardEl.style.transform = `translate3d(${translateX}px, 20px, ${translateZ}px) rotateY(${rotateY + 180}deg)`;
+                }, 600 + index * 150); 
+
+            }, 50);
+        });
+
+        askDeepSeek(systemPrompt);
+    }
+
+    // ==================== DeepSeek API 与数据流清洗 ====================
+    async function askDeepSeek(customPrompt) {
+        interpretationDisplay.innerHTML = "正在深度复盘 3D 阵法，星轨正在精准对齐问卜者命盘...";
+        const apiUrl = "https://api.deepseek.com/v1/chat/completions";
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
+                },
+                body: JSON.stringify({ 
+                    model: "deepseek-chat",
+                    messages: [{ role: "user", content: customPrompt }],
+                    temperature: 0.75
+                })
+            });
+            const data = await response.json();
+            
+            if (data.error) {
+                interpretationDisplay.innerText = "【星象扰动】接口提示: " + data.error.message;
+                canDraw = true; // 报错时释放锁，保证产品可用性
+                return;
+            }
+            
+            const replyText = data.choices[0].message.content;
+            typeWriter(replyText);
+        } catch (error) {
+            console.error(error);
+            interpretationDisplay.innerText = "【星象扰动】未能在虚空中捕捉到回应。请检查你的网络和代码中的KEY。";
+            canDraw = true; 
+        }
+    }
+
+    function typeWriter(text) {
+        interpretationDisplay.innerHTML = "";
+        let cleanedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        cleanedText = cleanedText.replace(/【(.*?)】/g, '<br><br><span class="section-title">📍 $1</span><br>');
+
+        const charArray = Array.from(cleanedText); 
+        let i = 0;
+        
+        function type() {
+            if (i < charArray.length) {
+                if (cleanedText.substring(i, i + 8) === '<strong>') {
+                    let endIdx = cleanedText.indexOf('</strong>', i);
+                    interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 9);
+                    i = endIdx + 9;
+                } else if (cleanedText.substring(i, i + 28) === '<span class="section-title">') {
+                    let endIdx = cleanedText.indexOf('</span>', i);
+                    interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 7);
+                    i = endIdx + 7;
+                } else if (cleanedText.substring(i, i + 4) === '<br>') {
+                    interpretationDisplay.innerHTML += '<br>';
+                    i += 4;
+                } else {
+                    interpretationDisplay.innerHTML += charArray[i];
+                    i++;
+                }
+                setTimeout(type, 20); 
+            } else {
+                // 解牌结束后重置状态，允许下一次抽牌
+                setTimeout(() => { canDraw = true; initDeckVisual(); }, 3000); 
+            }
+        }
+        type();
+    }
+
+    function handleButtonClick() {
+        if (!canDraw) {
+            alert("占卜师正在凝神解牌，请字迹隐去后再试。");
+            return;
+        }
+        canDraw = false;
+        executeDraw();
+    }
+
+    // ==================== MediaPipe 手势轨迹核心修正 ====================
+    function onResults(results) {
+        // PM 视角的产品状态引导：检测到手掌时给用户绿色高亮反馈
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            gestureStatus.innerText = "🟢 已锁定掌纹，向下挥手即可抽牌";
+            gestureStatus.style.color = "#00ffcc";
+            
+            if (!canDraw) return; // 正在占卜中则不触发
+
+            const hand = results.multiHandLandmarks[0];
+            const indexFingerTipY = hand[8].y; // 获取食指尖端的Y坐标
+
+            // 算法调优：增加挥手幅度和防抖判断 (从上往下挥动，差值大于0.08)
+            if (lastY !== 0 && (indexFingerTipY - lastY) > 0.08) {
+                canDraw = false; 
+                gestureStatus.innerText = "⚡ 命运已奉召，正在破空布阵...";
+                executeDraw(); 
+            }
+            lastY = indexFingerTipY;
+        } else {
+            gestureStatus.innerText = "🔮 命运之眼已开，请在摄像头前展露手掌";
+            gestureStatus.style.color = "#e5c158";
+            lastY = 0; 
+        }
+    }
+
+    // 实例化与配置初始化
+    const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+    hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+    hands.onResults(onResults);
+
+    const videoElement = document.getElementById('input_video');
+    const camera = new Camera(videoElement, {
+        onFrame: async () => { 
+            await hands.send({image: videoElement}); 
+        },
+        width: 240, 
+        height: 180
+    });
+    camera.start();
+
+    window.onload = initDeckVisual;
+  </script>
+</body>
+</html>
