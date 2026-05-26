@@ -2,413 +2,719 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>🔮 阁楼塔罗 v3.0：全息立体 3D 占卜舞台</title>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-  <script defer src="https://cloud.umami.is/script.js" data-website-id="92e912e9-85cd-4f5b-b195-30e5a9e7c98c"></script>
-
+  <title>🔮 塔罗</title>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <style>
-    body { font-family: 'Georgia', serif; text-align: center; background: #06060b; color: #e5c158; margin: 0; padding: 15px; overflow-x: hidden; }
-    h1 { color: #e5c158; text-shadow: 0 0 15px rgba(229,193,88,0.6); font-size: 2.2rem; margin: 5px 0; }
-    .container { max-width: 1000px; margin: auto; }
-    
-    /* 控制面板 */
-    .control-panel { margin: 15px 0; display: flex; justify-content: center; gap: 15px; align-items: center; flex-wrap: wrap; }
-    select { background: #12121f; border: 1px solid #e5c158; color: #e5c158; padding: 10px 15px; border-radius: 20px; font-size: 0.95rem; outline: none; cursor: pointer; }
-    input[type="text"] { background: #12121f; border: 1px solid #e5c158; color: #fff; padding: 12px 20px; width: 40%; border-radius: 25px; font-size: 0.95rem; outline: none; text-align: center; }
-    #confirm-btn { background: linear-gradient(135deg, #e5c158 0%, #b38f2e 100%); border: none; color: #0b0b12; padding: 12px 25px; border-radius: 25px; font-weight: bold; font-size: 0.95rem; cursor: pointer; transition: all 0.3s; box-shadow: 0 4px 10px rgba(229,193,88,0.3); }
-    #confirm-btn:hover { transform: scale(1.05); box-shadow: 0 6px 15px rgba(229,193,88,0.5); }
-
-    /* 工作区布局 */
-    .workspace { display: flex; justify-content: center; align-items: center; gap: 20px; flex-wrap: wrap; margin-top: 10px; }
-    
-    /* 左侧摄像头（缩小作为辅助检测） */
-    #video-container { position: relative; width: 240px; height: 180px; border: 1px solid rgba(229,193,88,0.4); border-radius: 12px; overflow: hidden; background: #000; }
-    video { transform: rotateY(180deg); width: 100%; height: 100%; object-fit: cover; }
-    
-    /* PM体验设计：手势状态提示灯 */
-    #gesture-status { position: absolute; bottom: 0; left: 0; width: 100%; background: rgba(0,0,0,0.7); color: #00ffcc; font-size: 0.75rem; padding: 4px 0; }
-
-    /* ✨ 右侧：复刻效果图的 3D 全息占卜舞台 */
-    #stage-3d { 
-      position: relative; 
-      width: 600px; 
-      height: 320px; 
-      background: radial-gradient(circle at 50% 80%, #151226 0%, #06060b 70%);
-      border-radius: 15px;
-      border: 1px solid rgba(229,193,88,0.2);
-      box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
-      perspective: 1000px; 
-      overflow: hidden;
+    :root {
+      --stage-padding: clamp(18px, 3.2vh, 40px);
+      --result-height: clamp(210px, 26vh, 280px);
+      --result-gap: clamp(34px, 6vh, 76px);
+      --card-width: clamp(92px, 7vw, 116px);
+      --card-height: calc(var(--card-width) * 1.714);
     }
 
-    /* ✨ 底部旋转流光法阵效果 */
-    .magic-circle {
-      position: absolute;
-      width: 450px;
-      height: 450px;
-      left: 75px;
-      bottom: -260px;
-      border: 2px dashed rgba(229,193,88,0.2);
-      border-radius: 50%;
-      transform: rotateX(75deg);
-      box-shadow: 0 0 30px rgba(229,193,88,0.1), inset 0 0 30px rgba(229,193,88,0.1);
-      animation: spin 20s linear infinite;
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #020205; font-family: 'Georgia', serif; color: #e5c158; }
+    
+    #fullscreen-stage {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      background: radial-gradient(circle at 50% 45%, #0c081a 0%, #020205 95%);
+      perspective: 1600px; display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+      box-sizing: border-box; padding: var(--stage-padding); z-index: 1;
+    }
+
+    /* 顶部控制区 */
+    .top-bar { display: flex; flex-direction: column; align-items: center; z-index: 100; width: 100%; max-width: 800px; }
+    h1 { font-size: 1.7rem; margin: 0 0 12px 0; letter-spacing: 3px; text-shadow: 0 0 15px rgba(229,193,88,0.25); }
+    .input-group { display: flex; width: 100%; gap: 15px; justify-content: center; }
+    select, input[type="text"] { background: rgba(14,14,26,0.92); border: 1px solid #e5c158; color: #e5c158; padding: 10px 22px; border-radius: 20px; font-size: 0.95rem; outline: none; backdrop-filter: blur(8px); }
+    input[type="text"] { width: 55%; color: #fff; border-color: rgba(229,193,88,0.3); text-align: center; }
+    input[type="text"]:focus { border-color: #e5c158; box-shadow: 0 0 15px rgba(229,193,88,0.2); }
+
+    #gesture-status { margin-top: 15px; color: #fff; background: rgba(229,193,88,0.08); padding: 6px 22px; border-radius: 20px; border: 1px solid rgba(229,193,88,0.25); font-size: 0.85rem; letter-spacing: 1px; z-index: 10; }
+
+    /* 3D 环形舞台中央 */
+    #cards-container {
+      position: absolute; left: 0; right: 0;
+      top: clamp(128px, 19vh, 182px);
+      bottom: calc(var(--result-height) + var(--result-gap));
+      min-height: 250px;
+      transform-style: preserve-3d; display: flex; justify-content: center; align-items: center; z-index: 5;
       pointer-events: none;
     }
-    .magic-circle::after {
-      content: '';
-      position: absolute;
-      top: 10px; bottom: 10px; left: 10px; right: 10px;
-      border: 1px solid rgba(229,193,88,0.15);
-      border-radius: 50%;
-    }
-    @keyframes spin { 0% { transform: rotateX(75deg) rotate(0deg); } 100% { transform: rotateX(75deg) rotate(360deg); } }
 
-    /* ✨ 3D 卡牌容器堆叠层 */
-    #cards-container {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      transform-style: preserve-3d;
-      transition: transform 0.5s;
+    .magic-circle {
+      position: absolute; width: min(750px, 92vw); height: min(750px, 92vw); left: 50%; bottom: calc(var(--result-height) - 700px);
+      border: 1px dashed rgba(229,193,88,0.12); border-radius: 50%; transform: translateX(-50%) rotateX(80deg);
+      box-shadow: inset 0 0 40px rgba(229,193,88,0.03); animation: spin 40s linear infinite; pointer-events: none; z-index: 1;
     }
+    @keyframes spin { 0% { transform: translateX(-50%) rotateX(80deg) rotate(0deg); } 100% { transform: translateX(-50%) rotateX(80deg) rotate(360deg); } }
 
-    /* ✨ 古典复古卡牌基础样式 */
+    /* 3D卡牌高质感样式 */
     .card-3d {
-      position: absolute;
-      width: 95px;
-      height: 160px;
-      left: 252px; /* 居中定位 (600/2 - 95/2) */
-      top: 50px;
-      transform-style: preserve-3d;
-      transition: all 0.8s cubic-bezier(0.25, 0.8, 0.25, 1);
-      cursor: pointer;
+      position: absolute; width: var(--card-width); height: var(--card-height); transform-style: preserve-3d;
+      transition: transform 0.7s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.4s; z-index: 2;
     }
 
-    /* 卡牌背面（精美神秘星轨） */
     .card-back {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: repeating-linear-gradient(45deg, #13101c, #13101c 5px, #221a35 5px, #221a35 10px);
-      border: 2px solid #b38f2e;
-      border-radius: 8px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.6);
-      backface-visibility: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font-size: 1.5rem;
-      color: rgba(229,193,88,0.4);
+      position: absolute; width: 100%; height: 100%;
+      background: repeating-linear-gradient(45deg, #090710, #090710 6px, #161124 6px, #161124 12px);
+      border: 1px solid #b38f2e; border-radius: 8px; backface-visibility: hidden;
+      display: flex; justify-content: center; align-items: center; font-size: 1.6rem; color: rgba(229,193,88,0.2);
     }
 
-    /* 卡牌正面（金丝白底古典复古感） */
     .card-front {
-      position: absolute;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(135deg, #1c192d 0%, #0d0b14 100%);
-      border: 2px solid #e5c158;
-      border-radius: 8px;
-      box-shadow: 0 8px 20px rgba(0,0,0,0.8);
-      backface-visibility: hidden;
-      transform: rotateY(180deg); 
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 5px;
-      box-sizing: border-box;
+      position: absolute; width: 100%; height: 100%;
+      background: linear-gradient(160deg, #f5e5b9 0%, #d2a94a 100%);
+      border: 2px solid #e5c158; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.85);
+      backface-visibility: hidden; transform: rotateY(180deg); overflow: hidden;
+      display: flex; flex-direction: column; justify-content: flex-start; align-items: center; padding: 6px; box-sizing: border-box;
+    }
+    .card-art-wrap { width: 100%; height: calc(100% - 42px); border-radius: 5px; overflow: hidden; background: #130b12; border: 1px solid rgba(76, 45, 11, 0.32); }
+    .card-art { width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block; filter: saturate(1.05) contrast(1.02); }
+    .image-fallback::after { content: '图案加载中'; display: flex; height: 100%; align-items: center; justify-content: center; color: #e5c158; font-size: 0.72rem; }
+    .card-front .name { width: 100%; font-size: 0.8rem; line-height: 1; font-weight: bold; color: #2a1607; letter-spacing: 1px; margin: 5px 0 3px 0; text-align: center; }
+    .card-front .tag { width: 100%; font-size: 0.55rem; line-height: 1.15; color: #4b2e15; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .is-reversed .card-front { transform: rotateY(180deg); }
+
+    /* 环形选中时的悬浮态（沿原3D角度向前推出） */
+    .card-3d.hovered {
+      box-shadow: 0 0 30px rgba(229,193,88,0.75); z-index: 80 !important;
     }
 
-    .card-front .name { font-size: 1.1rem; font-weight: bold; color: #e5c158; letter-spacing: 2px; margin-bottom: 8px; text-shadow: 0 0 5px rgba(229,193,88,0.5); }
-    .card-front .tag { font-size: 0.7rem; color: #a49fb6; border-top: 1px dashed rgba(229,193,88,0.3); padding-top: 4px; width: 85%; text-align: center; }
-
-    /* ✨ 洗牌乱序抖动动画 */
     @keyframes shuffle3d {
-      0% { transform: translate3d(0,0,0) rotateY(0deg); }
+      0% { transform: translate3d(0,0,0); }
       50% { transform: translate3d(var(--x), var(--y), var(--z)) rotate(var(--r)); }
-      100% { transform: translate3d(0,0,0) rotateY(0deg); }
+      100% { transform: translate3d(0,0,0); }
     }
-    .shuffling-card { animation: shuffle3d 0.25s infinite ease-in-out; }
+    .shuffling-card { animation: shuffle3d 0.35s infinite ease-in-out; }
 
-    /* 解牌输出区 */
-    #result-box { margin-top: 20px; padding: 25px; background: rgba(18, 18, 31, 0.85); border-radius: 15px; border: 1px dashed #e5c158; min-height: 100px; text-align: left; max-width: 880px; margin-left: auto; margin-right: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-    #interpretation { color: #d1cbd4; line-height: 1.8; font-size: 1.05rem; }
-    .section-title { color: #e5c158; font-weight: bold; margin-top: 15px; margin-bottom: 5px; border-left: 3px solid #e5c158; padding-left: 8px; }
+    /* 📈 优化 3：量子级星尘微光光标样式 */
+    #cursor-container { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 9999; }
+    .cursor-particle {
+      position: absolute; 
+      width: 5px; height: 5px; /* 尺寸大幅缩小，显得更高级 */
+      background: radial-gradient(circle, #fff 0%, #e5c158 60%, transparent 100%);
+      border-radius: 50%; transform: translate(-50%, -50%) scale(0); opacity: 0;
+      transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.7s ease-out;
+      box-shadow: 0 0 8px rgba(229,193,88,0.6);
+    }
+    .cursor-particle.fade { transform: translate(-50%, -50%) scale(1.3); opacity: 0.7; }
+
+    /* 下方解牌框容器 */
+    #result-box {
+      position: absolute; left: 50%; bottom: var(--stage-padding); transform: translateX(-50%);
+      width: calc(100% - var(--stage-padding) * 2); max-width: 900px; height: var(--result-height); overflow-y: auto;
+      background: rgba(6, 6, 10, 0.92); border-radius: 20px; border: 1px solid rgba(229,193,88,0.18);
+      padding: 25px 32px; box-sizing: border-box; backdrop-filter: blur(15px); box-shadow: 0 -15px 45px rgba(0,0,0,0.7); z-index: 30; text-align: left;
+    }
+    #interpretation { color: #d3cbdc; line-height: 1.9; font-size: 1.05rem; }
+    .section-title { color: #e5c158; font-weight: bold; margin-top: 22px; display: block; border-left: 4px solid #e5c158; padding-left: 12px; font-size: 1.15rem; }
+
+
+
+    @media (max-height: 760px) {
+      h1 { font-size: 1.28rem; margin-bottom: 8px; }
+      select, input[type="text"] { padding: 8px 16px; font-size: 0.86rem; }
+      #gesture-status { margin-top: 9px; padding: 5px 16px; }
+      #interpretation { font-size: 0.95rem; line-height: 1.65; }
+      #result-box { padding: 18px 22px; }
+    }
+
+    @media (max-width: 720px) {
+      .input-group { flex-direction: column; gap: 9px; align-items: center; }
+      select, input[type="text"] { width: min(92vw, 520px); box-sizing: border-box; }
+      #cards-container { top: 178px; }
+    }
+
+    #hidden-video-container { position: absolute; left: 0; top: 0; width: 1px; height: 1px; opacity: 0.001; overflow: hidden; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>🔮 阁楼塔罗 <span style="font-size: 1.1rem; vertical-align: middle; color: #b38f2e; letter-spacing: 1px;">v3.0 全息立体舞台版</span></h1>
-    <p style="color: #a49fb6; margin: 2px 0 10px 0; font-size: 0.9rem;">—— 破空布阵，复刻命运的 3D 弧形回响 ——</p>
-    
-    <div class="control-panel">
-      <select id="spread-select" onchange="initDeckVisual()">
-        <option value="four_cards">🔮 经典时空牌阵 (1张切牌 + 3张时空牌)</option>
-        <option value="single_card">🃏 每日一卜启示 (单张纯粹指引)</option>
-        <option value="choice_two">⚖️ 抉择十字牌阵 (两难方案二选一)</option>
-      </select>
-      <input type="text" id="user-question" placeholder="在此凝练你的困惑（如：六月面试冲刺，能顺利拿到目标Offer吗？）...">
-      <button id="confirm-btn" onclick="handleButtonClick()">确认启示</button>
+
+  <div id="fullscreen-stage">
+    <div id="cursor-container"></div> <div class="top-bar">
+      <h1>🔮 塔罗 <span style="font-size: 0.95rem; color: #b38f2e; vertical-align: middle; opacity: 0.8;"></span></h1>
+      <div class="input-group">
+        <select id="spread-select" onchange="resetUXtoDeck()">
+          <option value="four_cards">🔮 经典综合牌阵 (4张)</option>
+          <option value="single_card">🃏 每日一卜启示 (单张)</option>
+          <option value="choice_two">⚖️ 抉择十字牌阵 (4张)</option>
+        </select>
+        <input type="text" id="user-question" placeholder="在此写下心中的困惑，开启无缝占卜..." oninput="onQuestionChanged()">
+      </div>
+      <div id="gesture-status">● 星轨相机初始化中...</div>
     </div>
 
-    <div class="workspace">
-      <div id="video-container">
-        <video id="input_video" autoplay playsinline></video>
-        <div id="gesture-status">📷 正在启动命运之眼...</div>
-      </div>
-      
-      <div id="stage-3d">
-        <div class="magic-circle"></div> 
-        <div id="cards-container"></div>
-      </div>
-    </div>
+    <div class="magic-circle"></div>
+    <div id="cards-container"></div>
 
     <div id="result-box">
-      <div id="interpretation">请在上方选定牌阵并输入困惑，随后点击“确认启示”或划动手掌启封命运...</div>
+      <div id="interpretation"><strong>【全新交互机制指引】</strong><br>1. <strong>【大幅横挥手】</strong>：洗牌堆，完整 78 张 Rider–Waite–Smith 维特塔罗会排布成一圈**全息弧形环绕阵列**。<br>2. <strong>【环形选牌】</strong>：左右摆动手掌，星尘光标划过的卡牌会沿 3D 轴线优雅凸起。<br>3. <strong>【单张下划抽取】</strong>：在某张牌上**利落地下划手指**，该卡牌会**独自飞入下方阵位解封**。<br>4. <strong>【递进集齐】</strong>：依次寻找下一张缘分之牌并重复下划，直到集满当前牌阵，即自动召唤高维解牌。<br>5. <strong>【无缝占卜】</strong>：清除上方输入框内容，所有卡牌即刻归位重置，无需刷新。</div>
     </div>
   </div>
 
+  <div id="hidden-video-container"><video id="webcam-video" autoplay playsinline></video></div>
+
   <script>
-    // ==================== DeepSeek 核心产品配置 ====================
     const DEEPSEEK_API_KEY = 'sk-eb537ab0a60f420889d225fc6dbae256'; 
-    
+
     const cardsContainer = document.getElementById('cards-container');
     const spreadSelect = document.getElementById('spread-select');
     const interpretationDisplay = document.getElementById('interpretation');
     const questionInput = document.getElementById('user-question');
     const gestureStatus = document.getElementById('gesture-status');
+    const cursorContainer = document.getElementById('cursor-container');
+    const videoElement = document.getElementById('webcam-video');
     
-    const tarotDeck = ["愚者", "魔术师", "女祭司", "皇后", "皇帝", "教皇", "恋人", "战车", "力量", "隐士", "命运之轮", "正义", "倒吊人", "死神", "节制", "恶魔", "高塔", "星星", "月亮", "太阳", "审判", "世界"];
-    
-    // 修复：必须在最上方定义控制锁，防止加载时状态错乱
-    let canDraw = true;
-    let lastY = 0; 
+    const WIKIMEDIA_FILE_BASE = 'https://commons.wikimedia.org/wiki/Special:FilePath/';
 
-    // ==================== ✨ 复刻动态 3D 洗牌视觉效果 ====================
-    function initDeckVisual() {
-        cardsContainer.innerHTML = '';
-        interpretationDisplay.innerText = "阵法已就绪。静心冥想，点击“确认启示”或凌空挥手解印...";
-        const currentSpread = spreadSelect.value;
-        
-        let cardCount = currentSpread === 'single_card' ? 8 : 12;
-        
-        for (let i = 0; i < cardCount; i++) {
-            const card = document.createElement('div');
-            card.className = 'card-3d shuffling-card';
-            
-            card.style.setProperty('--x', `${(Math.random() - 0.5) * 60}px`);
-            card.style.setProperty('--y', `${(Math.random() - 0.5) * 20}px`);
-            card.style.setProperty('--z', `${(Math.random() - 0.5) * 40}px`);
-            card.style.setProperty('--r', `${(Math.random() - 0.5) * 15}deg`);
-            
-            card.style.transform = `translate3d(${i * 0.5}px, ${i * -0.3}px, ${i * -2}px)`;
-            card.innerHTML = `<div class="card-back">🔮</div>`;
-            cardsContainer.appendChild(card);
+    // 78 张完整 Rider–Waite–Smith / 维特塔罗牌库。
+    // 文件名对应 Wikimedia Commons 的 Rider-Waite-Smith tarot deck (TaionWC) 图像集。
+    const majorArcana = [
+        { name: "愚者", en: "The Fool", file: "RWS Tarot 00 Fool.jpg" },
+        { name: "魔术师", en: "The Magician", file: "RWS Tarot 01 Magician.jpg" },
+        { name: "女祭司", en: "The High Priestess", file: "RWS Tarot 02 High Priestess.jpg" },
+        { name: "皇后", en: "The Empress", file: "RWS Tarot 03 Empress.jpg" },
+        { name: "皇帝", en: "The Emperor", file: "RWS Tarot 04 Emperor.jpg" },
+        { name: "教皇", en: "The Hierophant", file: "RWS Tarot 05 Hierophant.jpg" },
+        { name: "恋人", en: "The Lovers", file: "RWS Tarot 06 Lovers.jpg" },
+        { name: "战车", en: "The Chariot", file: "RWS Tarot 07 Chariot.jpg" },
+        { name: "力量", en: "Strength", file: "RWS Tarot 08 Strength.jpg" },
+        { name: "隐士", en: "The Hermit", file: "RWS Tarot 09 Hermit.jpg" },
+        { name: "命运之轮", en: "Wheel of Fortune", file: "RWS Tarot 10 Wheel of Fortune.jpg" },
+        { name: "正义", en: "Justice", file: "RWS Tarot 11 Justice.jpg" },
+        { name: "倒吊人", en: "The Hanged Man", file: "RWS Tarot 12 Hanged Man.jpg" },
+        { name: "死神", en: "Death", file: "RWS Tarot 13 Death.jpg" },
+        { name: "节制", en: "Temperance", file: "RWS Tarot 14 Temperance.jpg" },
+        { name: "恶魔", en: "The Devil", file: "RWS Tarot 15 Devil.jpg" },
+        { name: "高塔", en: "The Tower", file: "RWS Tarot 16 Tower.jpg" },
+        { name: "星星", en: "The Star", file: "RWS Tarot 17 Star.jpg" },
+        { name: "月亮", en: "The Moon", file: "RWS Tarot 18 Moon.jpg" },
+        { name: "太阳", en: "The Sun", file: "RWS Tarot 19 Sun.jpg" },
+        { name: "审判", en: "Judgement", file: "RWS Tarot 20 Judgement.jpg" },
+        { name: "世界", en: "The World", file: "RWS Tarot 21 World.jpg" }
+    ].map(card => ({ ...card, arcana: "大阿尔卡那", suit: "Major Arcana", element: "灵性", theme: "原型力量、命运课题与人生阶段" }));
+
+    const minorSuits = [
+        { zh: "权杖", en: "Wands", filePrefix: "Wands", element: "火", theme: "行动、热情、创造力与事业推进" },
+        { zh: "圣杯", en: "Cups", filePrefix: "Cups", element: "水", theme: "情绪、关系、直觉与内在感受" },
+        { zh: "宝剑", en: "Swords", filePrefix: "Swords", element: "风", theme: "理性、冲突、沟通与决策" },
+        { zh: "星币", en: "Pentacles", filePrefix: "Pents", element: "土", theme: "现实、资源、金钱与长期积累" }
+    ];
+
+    const minorRanks = [
+        { n: 1, zh: "王牌", en: "Ace" },
+        { n: 2, zh: "二", en: "Two" },
+        { n: 3, zh: "三", en: "Three" },
+        { n: 4, zh: "四", en: "Four" },
+        { n: 5, zh: "五", en: "Five" },
+        { n: 6, zh: "六", en: "Six" },
+        { n: 7, zh: "七", en: "Seven" },
+        { n: 8, zh: "八", en: "Eight" },
+        { n: 9, zh: "九", en: "Nine" },
+        { n: 10, zh: "十", en: "Ten" },
+        { n: 11, zh: "侍从", en: "Page" },
+        { n: 12, zh: "骑士", en: "Knight" },
+        { n: 13, zh: "王后", en: "Queen" },
+        { n: 14, zh: "国王", en: "King" }
+    ];
+
+    const minorArcana = minorSuits.flatMap(suit => minorRanks.map(rank => {
+        const no = String(rank.n).padStart(2, '0');
+        return {
+            name: `${suit.zh}${rank.zh}`,
+            en: `${rank.en} of ${suit.en}`,
+            file: `${suit.filePrefix}${no}.jpg`,
+            arcana: `小阿尔卡那 · ${suit.zh}`,
+            suit: suit.zh,
+            element: suit.element,
+            theme: suit.theme
+        };
+    }));
+
+    const tarotDeck = [...majorArcana, ...minorArcana].map((card, index) => ({
+        ...card,
+        id: index,
+        img: `${WIKIMEDIA_FILE_BASE}${encodeURIComponent(card.file)}?width=260`
+    }));
+
+    // 用稳定 id 做唯一真相源：DOM 上显示哪张牌，解牌 prompt 就读取同一个 cardId。
+    const tarotById = new Map(tarotDeck.map(card => [String(card.id), card]));
+
+    const SHOW_ALL_78_CARDS = true; // 如果后续想降低手势选择密度，可改成 false。
+    const VISIBLE_CARD_COUNT = SHOW_ALL_78_CARDS ? tarotDeck.length : 24;
+
+    function shuffleDeck(deck) {
+        const copy = [...deck];
+        for (let i = copy.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [copy[i], copy[j]] = [copy[j], copy[i]];
+        }
+        return copy;
+    }
+
+    function getCardPromptName(card) {
+        return `${card.name} / ${card.en} / ${card.arcana} / 元素：${card.element}`;
+    }
+    
+    // 状态机变量
+    let currentStage = 'deck'; // deck -> spread -> interpreting
+    let currentInputText = "";
+    const totalCardsInDeck = Math.min(VISIBLE_CARD_COUNT, tarotDeck.length); 
+    let hoveredCardIndex = -1;
+    let lastX = 0; let lastY = 0;
+    let swipeCount = 0;
+
+    // 📈 优化 2：单张递进抽牌核心变量
+    let sessionDrawnCards = []; // 存放当前已经单张抽出来的牌组数据
+    let currentDeckShuffle = []; // 当前轮次的独立洗乱牌堆
+    let currentSpreadCards = []; // 当前铺开的可见牌，索引只用于定位，真实身份由 cardId 锁定
+
+    // 下划抽牌手势闸门：一次完整下划只允许触发一张牌，手指上抬后才重新解锁。
+    let drawGestureArmed = true;
+    let activeDrawAnimation = false;
+    let drawLockUntil = 0;
+    const DRAW_LOCK_MS = 900;
+    const DRAW_DOWN_THRESHOLD = 0.11;
+    const DRAW_REARM_UPWARD_DY = -0.025;
+
+    // 不同牌阵对应的占卜位标签名
+    const spreadSlotTags = {
+        four_cards: ["切牌 (现状)", "过去因缘", "现在局势", "未来指向"],
+        single_card: ["核心启示"],
+        choice_two: ["方案 A 现状", "方案 A 结果", "方案 B 现状", "方案 B 结果"]
+    };
+
+
+    function getDrawSlotY() {
+        const resultBox = document.getElementById('result-box');
+        const containerRect = cardsContainer.getBoundingClientRect();
+        const resultRect = resultBox.getBoundingClientRect();
+        const cardEl = cardsContainer.children[0];
+        const cardHeight = cardEl ? (parseFloat(window.getComputedStyle(cardEl).height) || 180) : 180;
+        const safeGap = 28;
+        const idealCardCenterY = resultRect.top - safeGap - cardHeight / 2;
+        const containerCenterY = containerRect.top + containerRect.height / 2;
+        const minY = -90;
+        const maxY = Math.max(35, containerRect.height / 2 - cardHeight / 2 - safeGap);
+        return Math.max(minY, Math.min(maxY, idealCardCenterY - containerCenterY));
+    }
+
+    function getDrawSlotX(currentSlotIndex, requiredCount) {
+        const cardEl = cardsContainer.children[0];
+        const cardWidth = cardEl ? (parseFloat(window.getComputedStyle(cardEl).width) || 105) : 105;
+        const gap = Math.min(142, Math.max(96, cardWidth * 1.22));
+        const slotMid = (requiredCount - 1) / 2;
+        return (currentSlotIndex - slotMid) * gap;
+    }
+
+    function buildCardFront(cardData, tagName, isReversed) {
+        return `
+          <div class="card-back">🔮</div>
+          <div class="card-front">
+            <div class="card-art-wrap"><img class="card-art" src="${cardData.img}" alt="${cardData.name} ${cardData.en} 1909 Rider-Waite-Smith tarot card" loading="eager" onerror="this.style.display='none'; this.parentElement.classList.add('image-fallback');"></div>
+            <div class="name">${cardData.name}</div>
+            <div class="tag">${tagName}${isReversed ? ' · 逆位' : ' · 正位'}</div>
+          </div>`;
+    }
+
+
+    function preloadTarotImages() {
+        // 78 张图错峰预加载，避免首屏一次性请求过重。
+        tarotDeck.forEach((card, index) => {
+            setTimeout(() => {
+                const img = new Image();
+                img.src = card.img;
+            }, index * 45);
+        });
+    }
+
+    function onQuestionChanged() {
+        const inputText = questionInput.value.trim();
+        if (inputText === "") {
+            resetUXtoDeck();
+            interpretationDisplay.innerHTML = "阵法已深层归位。请重新输入困惑，随后凌空挥手解封宿命牌阵...";
+        } else if (currentStage === 'interpreting' && inputText !== currentInputText) {
+             gestureStatus.innerText = "● 侦测到新意念，再次大幅度左右挥手即可将卡牌归位重洗...";
+             currentStage = 'spread'; 
         }
     }
 
-    // ==================== ✨ 核心布阵：3D 弧形展开 + 翻牌动画 ====================
-    function executeDraw() {
-        const currentSpread = spreadSelect.value;
-        const shuffled = [...tarotDeck].sort(() => Math.random() - 0.5);
-        cardsContainer.innerHTML = ''; 
+    function resetUXtoDeck() {
+        currentStage = 'deck'; 
+        swipeCount = 0; hoveredCardIndex = -1;
+        lastX = 0; lastY = 0;
+        currentInputText = ""; 
+        sessionDrawnCards = [];
+        currentSpreadCards = [];
+        drawGestureArmed = true;
+        activeDrawAnimation = false;
+        drawLockUntil = 0;
+        initDeckVisual(); 
+    }
+
+    // 状态 1：中央叠堆颤动乱序
+    function initDeckVisual() {
+        cardsContainer.innerHTML = '';
+        currentDeckShuffle = shuffleDeck(tarotDeck); // 78 张完整牌库洗牌
+        currentSpreadCards = currentDeckShuffle.slice(0, totalCardsInDeck);
         
-        let drawnCards = [];
-        let systemPrompt = "";
-        const question = questionInput.value.trim() ? questionInput.value : "我未来的命运指引";
-
-        if (currentSpread === 'four_cards') {
-            drawnCards = [
-                { name: shuffled[0], tag: "切牌 (现状)" },
-                { name: shuffled[1], tag: "过去因缘" },
-                { name: shuffled[2], tag: "现在局势" },
-                { name: shuffled[3], tag: "未来指向" }
-            ];
-            systemPrompt = `你是一位古典塔罗占卜大师。问卜者的问题是：“${question}”。本次采用经典综合时空牌阵，抽出的四张牌分别是：
-1. 【切牌/核心现状】：${drawnCards[0].name}
-2. 【过去因缘】：${drawnCards[1].name}
-3. 【现在局势】：${drawnCards[2].name}
-4. 【未来指向】：${drawnCards[3].name}
-请对这四张牌的组合进行全面而有深度的逻辑关联解读。多用文学隐喻，直击痛点。请严格分为三段输出，每段开头加上【】标签，例如：【核心切牌与潜意识状态】、【过去、现在、未来的时间轴流转】、【命运指引与高维建议】。`;
-        } else if (currentSpread === 'single_card') {
-            drawnCards = [{ name: shuffled[0], tag: "核心启示" }];
-            systemPrompt = `你是一位古典塔罗占卜大师。问卜者的问题是：“${question}”。他抽到了单张核心启示牌：【${drawnCards[0].name}】。请针对他的困惑，给出一段150字左右的一针见血、高冷优雅的解牌与行动建议。`;
-        } else if (currentSpread === 'choice_two') {
-            drawnCards = [
-                { name: shuffled[0], tag: "方案 A 现状" },
-                { name: shuffled[1], tag: "方案 A 结果" },
-                { name: shuffled[2], tag: "方案 B 现状" },
-                { name: shuffled[3], tag: "方案 B 结果" }
-            ];
-            systemPrompt = `你是一位古典塔罗占卜大师。问卜者正处于两难抉择中，他的核心困惑是：“${question}”。本次采用二选一十字牌阵，抽出的四张牌分别是：
-- 方案 A (选择路径一) —— 现状牌：${drawnCards[0].name}，结果牌：${drawnCards[1].name}
-- 方案 B (选择路径二) —— 现状牌：${drawnCards[2].name}，结果牌：${drawnCards[3].name}
-请对这两个方案的前景进行透彻的对比解剖，给出清醒、不和稀泥的决策判断。请严格分为三段输出，每段开头加上【】标签，例如：【方案 A 路径推演】、【方案 B 路径推演】、【占卜师的终极裁决】。`;
-        }
-
-        const total = drawnCards.length;
-        drawnCards.forEach((card, index) => {
-            const cardEl = document.createElement('div');
-            cardEl.className = 'card-3d';
+        for (let i = 0; i < totalCardsInDeck; i++) {
+            const cardData = currentSpreadCards[i];
+            const card = document.createElement('div');
+            card.className = 'card-3d shuffling-card';
+            card.style.setProperty('--x', `${(Math.random() - 0.5) * 45}px`);
+            card.style.setProperty('--y', `${(Math.random() - 0.5) * 15}px`);
+            card.style.setProperty('--z', `${(Math.random() - 0.5) * 35}px`);
+            card.style.setProperty('--r', `${(Math.random() - 0.5) * 12}deg`);
             
-            cardEl.innerHTML = `
-                <div class="card-back">🔮</div>
-                <div class="card-front">
-                    <div class="name">${card.name}</div>
-                    <div class="tag">${card.tag}</div>
-                </div>
-            `;
-            cardsContainer.appendChild(cardEl);
+            card.style.transform = `translate3d(${(i - totalCardsInDeck/2) * 1.5}px, -20px, ${i * -2.5}px)`;
+            card.innerHTML = `<div class="card-back">🔮</div>`;
+            card.dataset.index = i;
+            card.dataset.deckIndex = i;
+            card.dataset.cardId = String(cardData.id);
+            card.dataset.cardName = `${cardData.name} / ${cardData.en}`;
+            card.dataset.drawn = "false"; // 初始状态未被抽走
+            cardsContainer.appendChild(card);
+        }
+        if (currentStage === 'deck') {
+            gestureStatus.innerText = `👋 阶段一：完整 ${tarotDeck.length} 张牌库已洗牌，请【大幅度左右晃手】铺开3D牌阵...`;
+        }
+    }
 
+    function getBaseTransform(card) {
+        return `translate3d(${card.dataset.baseX}px, ${card.dataset.baseY || -30}px, ${card.dataset.baseZ}px) rotateY(${card.dataset.baseRotateY}deg) scale(${card.dataset.baseScale || 1})`;
+    }
+
+    function getCardDataFromElement(cardEl, visualIndex) {
+        // 以 DOM 上的 cardId 为准，避免“显示牌面”和“解读牌名”走不同数组导致错位。
+        const cardId = cardEl?.dataset?.cardId;
+        if (cardId && tarotById.has(String(cardId))) {
+            return tarotById.get(String(cardId));
+        }
+        return currentSpreadCards[visualIndex] || currentDeckShuffle[visualIndex] || null;
+    }
+
+    // 📈 优化 1：完整 78 张牌的全息密集弧形阵列
+    function executeSpread() {
+        currentStage = 'spread';
+        sessionDrawnCards = []; // 清空已抽列表
+        currentSpreadCards = currentDeckShuffle.slice(0, totalCardsInDeck);
+        drawGestureArmed = true;
+        activeDrawAnimation = false;
+        drawLockUntil = 0;
+        const cardElements = cardsContainer.querySelectorAll('.card-3d');
+        const totalArc = totalCardsInDeck >= 60 ? 150 : Math.min(154, (totalCardsInDeck - 1) * 11);
+        const angleStep = totalCardsInDeck > 1 ? totalArc / (totalCardsInDeck - 1) : 0;
+        const startAngle = -totalArc / 2;
+        const baseScale = totalCardsInDeck >= 60 ? 0.58 : 1;
+        const hoverScale = totalCardsInDeck >= 60 ? 0.86 : 1.12;
+        const stageWidth = Math.min(window.innerWidth, 1320);
+        const ringRadiusX = Math.max(520, stageWidth * 0.58);
+        const ringDepth = Math.max(160, stageWidth * 0.24);
+        const fanDelay = totalCardsInDeck >= 60 ? 12 : 40;
+        const yBase = totalCardsInDeck >= 60 ? -38 : -30;
+        const hoverLift = totalCardsInDeck >= 60 ? 48 : 35;
+        const hoverForward = totalCardsInDeck >= 60 ? 78 : 55;
+        window.currentHoverScale = hoverScale;
+        window.currentHoverLift = hoverLift;
+        window.currentHoverForward = hoverForward;
+
+        cardElements.forEach((card, index) => {
+            const cardData = currentSpreadCards[index];
+            card.classList.remove('shuffling-card', 'hovered', 'is-reversed');
+            card.dataset.drawn = "false";
+            card.dataset.deckIndex = index;
+            card.dataset.cardId = String(cardData.id);
+            card.dataset.cardName = `${cardData.name} / ${cardData.en}`;
+            card.dataset.drawnOrder = "";
+            card.innerHTML = `<div class="card-back">🔮</div>`;
+            
+            // 78 张不能继续用原来的 11° 间距，否则会绕场多圈；这里改成 150° 大扇面密集展开。
+            const angle = startAngle + index * angleStep;
+            const rad = (angle * Math.PI) / 180;
+            const translateX = Math.sin(rad) * ringRadiusX;
+            const translateZ = (Math.cos(rad) - 1) * ringDepth; 
+            const rotateY = angle;
+            
+            card.dataset.baseX = translateX;
+            card.dataset.baseY = yBase;
+            card.dataset.baseZ = translateZ;
+            card.dataset.baseRotateY = rotateY;
+            card.dataset.baseScale = baseScale;
+            
             setTimeout(() => {
-                let rotateY = 0;
-                let translateX = 0;
-                let translateZ = 0;
-
-                if (total > 1) {
-                    const mid = (total - 1) / 2;
-                    const offset = index - mid;
-                    rotateY = offset * 18;       
-                    translateX = offset * 115;   
-                    translateZ = -Math.abs(offset) * 25; 
-                } else {
-                    translateZ = 30;
-                }
-
-                cardEl.style.transform = `translate3d(${translateX}px, 20px, ${translateZ}px) rotateY(${rotateY}deg)`;
-                
-                setTimeout(() => {
-                    cardEl.style.transform = `translate3d(${translateX}px, 20px, ${translateZ}px) rotateY(${rotateY + 180}deg)`;
-                }, 600 + index * 150); 
-
-            }, 50);
+                card.style.transform = getBaseTransform(card);
+                card.style.zIndex = index;
+            }, index * fanDelay); 
         });
+        
+        const required = spreadSlotTags[spreadSelect.value].length;
+        gestureStatus.innerText = `✨ 完整 ${tarotDeck.length} 张维特牌已洗入星环！请隔空选牌，依次下划抽取 [0/${required}] 张卡牌...`;
+    }
+
+    // 📈 优化 2：单张递进式起卦核心（1次下划抽1张）
+    function executeSingleCardDraw(selectedIndex) {
+        const now = Date.now();
+        const cardEl = cardsContainer.children[selectedIndex];
+        const currentSpread = spreadSelect.value;
+        const requiredCount = spreadSlotTags[currentSpread].length;
+        const currentSlotIndex = sessionDrawnCards.length; // 当前是第几张牌位
+
+        if (currentStage !== 'spread' || activeDrawAnimation || now < drawLockUntil) return false;
+        if (!cardEl || cardEl.dataset.drawn === "true") return false;
+        if (currentSlotIndex >= requiredCount) return false;
+
+        // 真实牌面由 DOM 上的 cardId 反查，渲染图片和写入解读缓存使用同一个 cardData。
+        const cardData = getCardDataFromElement(cardEl, selectedIndex);
+        if (!cardData) return false;
+
+        activeDrawAnimation = true;
+        drawGestureArmed = false;
+        drawLockUntil = now + DRAW_LOCK_MS;
+
+        cardEl.dataset.drawn = "true"; // 锁死此张牌，防止重复抽取
+        cardEl.dataset.drawnOrder = String(currentSlotIndex);
+        cardEl.dataset.cardId = String(cardData.id);
+        cardEl.dataset.cardName = `${cardData.name} / ${cardData.en}`;
+        cardEl.classList.remove('hovered');
+
+        const isReversed = Math.random() > 0.5;
+        const tagName = spreadSlotTags[currentSpread][currentSlotIndex];
+
+        // 注入经典 Rider-Waite-Smith 图案、中文牌名、牌位标签
+        cardEl.classList.toggle('is-reversed', isReversed);
+        cardEl.innerHTML = buildCardFront(cardData, tagName, isReversed);
+
+        // 存入当前会话缓存：这里保存的就是上面渲染图片用的同一个 cardData。
+        sessionDrawnCards.push({
+            id: cardData.id,
+            name: cardData.name,
+            en: cardData.en,
+            img: cardData.img,
+            arcana: cardData.arcana,
+            suit: cardData.suit,
+            element: cardData.element,
+            theme: cardData.theme,
+            promptName: getCardPromptName(cardData),
+            orientation: isReversed ? "逆位" : "正位",
+            tag: tagName
+        });
+
+        // 核心动态飞跃：从3D环形矩阵中脱离，飞入文字框上方的安全阵位，不遮挡解读文字
+        const slotX = getDrawSlotX(currentSlotIndex, requiredCount);
+        const slotY = getDrawSlotY();
+        
+        // 赋予单独的飞跃过渡属性，确保轨迹不与其他卡牌冲突
+        cardEl.style.transition = "transform 0.8s cubic-bezier(0.19, 1, 0.22, 1), box-shadow 0.4s";
+        cardEl.style.zIndex = 500 + currentSlotIndex;
+        
+        // 飞入安全阵位坐标：Y 由实时布局计算，确保牌面始终停在文字框上方
+        setTimeout(() => {
+            cardEl.style.transform = `translate3d(${slotX}px, ${slotY}px, 120px) rotateY(180deg) ${isReversed ? 'rotateZ(180deg)' : ''}`;
+        }, 10);
+
+        setTimeout(() => {
+            activeDrawAnimation = false;
+        }, DRAW_LOCK_MS);
+
+        const nextCount = sessionDrawnCards.length;
+        
+        // 检查判定：是否已经抽满当前牌阵所需的总张数
+        if (nextCount < requiredCount) {
+            gestureStatus.innerText = `🔮 已抽中「${cardData.name}」[${nextCount}/${requiredCount}]。请先略微上抬手指，再下划抽取下一张...`;
+        } else {
+            // 满额触发，锁死状态机，触发 DeepSeek 合盘演算
+            currentStage = 'interpreting';
+            gestureStatus.innerText = `🔮 最后一张「${cardData.name}」已入阵！星轨正在对齐合盘中...`;
+            triggerDeepSeekInterpretation();
+        }
+        return true;
+    }
+
+    // 满额起卦后，组合总 Prompt 召唤大模型
+    async function triggerDeepSeekInterpretation() {
+        currentInputText = questionInput.value.trim();
+        const question = currentInputText ? currentInputText : "我当下的潜在能量流转";
+        const currentSpread = spreadSelect.value;
+        
+        let systemPrompt = "";
+        if (currentSpread === 'four_cards') {
+            systemPrompt = `你是一位古典塔罗占卜大师。问卜者困惑：“${question}”。递进式抽选综合牌阵面如下：\n1. 【${sessionDrawnCards[0].tag}】：${sessionDrawnCards[0].promptName}（${sessionDrawnCards[0].orientation}）\n2. 【${sessionDrawnCards[1].tag}】：${sessionDrawnCards[1].promptName}（${sessionDrawnCards[1].orientation}）\n3. 【${sessionDrawnCards[2].tag}】：${sessionDrawnCards[2].promptName}（${sessionDrawnCards[2].orientation}）\n4. 【${sessionDrawnCards[3].tag}】：${sessionDrawnCards[3].promptName}（${sessionDrawnCards[3].orientation}）。\n请严格针对正逆位蕴含的阻碍或顺遂能量，做出多视角文学性解牌。分三段输出，每段开头用【】包装：【核心切牌与潜意识状态】、【时空轴能量流转路径】、【终极裁决与高维行动建议】。`;
+        } else if (currentSpread === 'single_card') {
+            systemPrompt = `你是一位塔罗大师。问卜者问题：“${question}”。单张核心启示牌：【${sessionDrawnCards[0].promptName}】（${sessionDrawnCards[0].orientation}）。请结合正逆位含义，给出一段180字左右一针见血、优雅深刻的解牌与行动建议。`;
+        } else {
+            systemPrompt = `你是一位塔罗大师。问卜者面临抉择：“${question}”。二选一十字牌阵结果：\n- 方案 A：现状${sessionDrawnCards[0].promptName}(${sessionDrawnCards[0].orientation}) -> 结果${sessionDrawnCards[1].promptName}(${sessionDrawnCards[1].orientation})\n- 方案 B：现状${sessionDrawnCards[2].promptName}(${sessionDrawnCards[2].orientation}) -> 结果${sessionDrawnCards[3].promptName}(${sessionDrawnCards[3].orientation})。\n请彻底对比两个方案的吉凶，分三段输出，段首加上【】：【方案 A 路径推演】、【方案 B 路径推演】、【占卜师的裁决天平】。`;
+        }
 
         askDeepSeek(systemPrompt);
     }
 
-    // ==================== DeepSeek API 与数据流清洗 ====================
-    async function askDeepSeek(customPrompt) {
-        interpretationDisplay.innerHTML = "正在深度复盘 3D 阵法，星轨正在精准对齐问卜者命盘...";
-        const apiUrl = "https://api.deepseek.com/v1/chat/completions";
+    // 📈 优化 3：量子级星尘微光发生器 (微缩高拟真火花)
+    function createCursorParticle(x, y) {
+        const particleCount = 3; // 大幅削减至 3 个，避免拥挤和视觉不适
+        for (let i = 0; i < particleCount; i++) {
+            const p = document.createElement('div');
+            p.className = 'cursor-particle';
+            p.style.left = `${x * 100}vw`;
+            p.style.top = `${y * 100}vh`;
+            
+            const offsetX = (Math.random() - 0.5) * 8;
+            const offsetY = (Math.random() - 0.5) * 8;
+            p.style.setProperty('transition-delay', `${Math.random() * 0.03}s`);
+            p.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(0)`;
+            cursorContainer.appendChild(p);
 
+            setTimeout(() => {
+                p.classList.add('fade');
+                p.style.transform = `translate(calc(-50% + ${offsetX * 3.2}px), calc(-50% + ${offsetY * 3.2}px)) scale(${Math.random() * 0.4 + 1.0})`;
+            }, 2);
+
+            setTimeout(() => p.remove(), 700); 
+        }
+    }
+
+    // ==================== 👁️ 手势映射有限状态机 ====================
+    function onResults(results) {
+        if (currentStage === 'interpreting') return; 
+
+        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            const hand = results.multiHandLandmarks[0];
+            const smoothX = 1 - hand[8].x; // 坐标轴镜像调正
+            const smoothY = hand[8].y;
+
+            // 呼叫轻量级星尘生成器
+            createCursorParticle(smoothX, smoothY);
+
+            // ---- 阶段一：挥手洗牌判定 ----
+            if (currentStage === 'deck') {
+                if (lastX !== 0) {
+                    const dx = smoothX - lastX;
+                    if (Math.abs(dx) > 0.08) { 
+                        swipeCount++;
+                        if (swipeCount > 3) { executeSpread(); swipeCount = 0; }
+                    }
+                }
+            } 
+            // ---- 阶段二：环形悬浮融合 + 单卡递进下划判定 ----
+            else if (currentStage === 'spread') {
+                // 空间映射：缩窄追踪核心区 (0.22 ~ 0.78)，防止用户手部过展
+                let mappedRatio = (smoothX - 0.18) / 0.64; 
+                mappedRatio = Math.max(0, Math.min(1, mappedRatio));
+                const targetIndex = Math.min(totalCardsInDeck - 1, Math.max(0, Math.round(mappedRatio * (totalCardsInDeck - 1))));
+                
+                if (!activeDrawAnimation && targetIndex !== hoveredCardIndex && targetIndex >= 0 && targetIndex < totalCardsInDeck) {
+                    // 撤销老的高亮（且必须是未被抽走的卡牌才能发生视觉回归）
+                    if (hoveredCardIndex !== -1) {
+                        const oldCard = cardsContainer.children[hoveredCardIndex];
+                        if (oldCard && oldCard.dataset.drawn === "false") {
+                            oldCard.classList.remove('hovered');
+                            oldCard.style.transform = getBaseTransform(oldCard);
+                        }
+                    }
+                    
+                    // 激活新高亮（已被抽走的卡牌不响应 Hover）
+                    hoveredCardIndex = targetIndex;
+                    const newCard = cardsContainer.children[hoveredCardIndex];
+                    if (newCard && newCard.dataset.drawn === "false") {
+                        newCard.classList.add('hovered');
+                        
+                        // 环形推进计算：78 张密集扇面下，悬浮牌需要更明显地向前弹出，便于确认选中牌。
+                        const bX = parseFloat(newCard.dataset.baseX);
+                        const bY = parseFloat(newCard.dataset.baseY || -30);
+                        const bZ = parseFloat(newCard.dataset.baseZ);
+                        const bRot = parseFloat(newCard.dataset.baseRotateY);
+                        const hoverScale = window.currentHoverScale || 1.12;
+                        const hoverLift = window.currentHoverLift || 35;
+                        const hoverForward = window.currentHoverForward || 55;
+                        
+                        newCard.style.transform = `translate3d(${bX}px, ${bY - hoverLift}px, ${bZ + hoverForward}px) rotateY(${bRot}deg) scale(${hoverScale})`;
+                    }
+                }
+
+                // 单张下划精准捕捉：用“下划触发 + 上抬复位”的边沿检测，防止一段下划在连续视频帧里抽出多张。
+                if (lastY !== 0) {
+                    const dy = smoothY - lastY;
+
+                    // 手指略微上抬后，才允许下一次下划触发。
+                    if (dy < DRAW_REARM_UPWARD_DY) {
+                        drawGestureArmed = true;
+                    }
+
+                    // 当 Y 轴出现明显下冲，且当前对准了一张完好的、没被抽过牌
+                    if (dy > DRAW_DOWN_THRESHOLD && drawGestureArmed && !activeDrawAnimation && Date.now() > drawLockUntil && hoveredCardIndex !== -1) {
+                        const targetCard = cardsContainer.children[hoveredCardIndex];
+                        if (targetCard && targetCard.dataset.drawn === "false") {
+                            const didDraw = executeSingleCardDraw(hoveredCardIndex);
+                            if (didDraw) {
+                                hoveredCardIndex = -1; // 当前下划动作已经消耗，等待上抬后再解锁
+                            }
+                        }
+                    }
+                }
+            }
+
+            lastX = smoothX; lastY = smoothY;
+        } else {
+            lastX = 0; lastY = 0;
+            drawGestureArmed = true;
+        }
+    }
+
+    // ==================== DeepSeek 数据通讯层 ====================
+    async function askDeepSeek(customPrompt) {
+        interpretationDisplay.innerHTML = "解牌中，可以发个呆";
         try {
-            const response = await fetch(apiUrl, {
+            const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
                 method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${DEEPSEEK_API_KEY}`
-                },
-                body: JSON.stringify({ 
-                    model: "deepseek-chat",
-                    messages: [{ role: "user", content: customPrompt }],
-                    temperature: 0.75
-                })
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${DEEPSEEK_API_KEY}` },
+                body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "user", content: customPrompt }], temperature: 0.75 })
             });
             const data = await response.json();
-            
-            if (data.error) {
-                interpretationDisplay.innerText = "【星象扰动】接口提示: " + data.error.message;
-                canDraw = true; // 报错时释放锁，保证产品可用性
-                return;
-            }
-            
-            const replyText = data.choices[0].message.content;
-            typeWriter(replyText);
+            if (data.error) { interpretationDisplay.innerText = "接口提示: " + data.error.message; resetUXtoDeck(); return; }
+            typeWriter(data.choices[0].message.content);
         } catch (error) {
-            console.error(error);
-            interpretationDisplay.innerText = "【星象扰动】未能在虚空中捕捉到回应。请检查你的网络和代码中的KEY。";
-            canDraw = true; 
+            interpretationDisplay.innerText = "【星象扰动】无法连接虚空，请检查您的网络连接与 API Key 设置。";
+            resetUXtoDeck();
         }
     }
 
     function typeWriter(text) {
         interpretationDisplay.innerHTML = "";
-        let cleanedText = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
-        cleanedText = cleanedText.replace(/【(.*?)】/g, '<br><br><span class="section-title">📍 $1</span><br>');
-
-        const charArray = Array.from(cleanedText); 
-        let i = 0;
         
+        // 📈 优化 4：极致符号过滤器，强制剪除大模型返回的 》, >, #, -, * 等语法噪音
+        let cleanedText = text
+            .replace(/\s+$/g, '') 
+            .replace(/^[\s\n>》#\-\*🔀⚖️🃏🔮📌\s]+|[\n>》#\-\*]+\s*/g, '') // 深度前置清洗
+            .replace(/\n{2,}/g, '\n') 
+            .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') 
+            .replace(/【(.*?)】/g, '<span class="section-title">📍 $1</span>'); 
+        
+        const charArray = Array.from(cleanedText); let i = 0;
         function type() {
             if (i < charArray.length) {
-                if (cleanedText.substring(i, i + 8) === '<strong>') {
-                    let endIdx = cleanedText.indexOf('</strong>', i);
-                    interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 9);
-                    i = endIdx + 9;
-                } else if (cleanedText.substring(i, i + 28) === '<span class="section-title">') {
-                    let endIdx = cleanedText.indexOf('</span>', i);
-                    interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 7);
-                    i = endIdx + 7;
-                } else if (cleanedText.substring(i, i + 4) === '<br>') {
-                    interpretationDisplay.innerHTML += '<br>';
-                    i += 4;
-                } else {
-                    interpretationDisplay.innerHTML += charArray[i];
-                    i++;
-                }
-                setTimeout(type, 20); 
+                if (cleanedText.substring(i, i + 8) === '<strong>') { let endIdx = cleanedText.indexOf('</strong>', i); interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 9); i = endIdx + 9; } 
+                else if (cleanedText.substring(i, i + 28) === '<span class="section-title">') { let endIdx = cleanedText.indexOf('</span>', i); interpretationDisplay.innerHTML += cleanedText.substring(i, endIdx + 7); i = endIdx + 7; } 
+                else { interpretationDisplay.innerHTML += charArray[i]; i++; }
+                document.getElementById('result-box').scrollTop = document.getElementById('result-box').scrollHeight;
+                setTimeout(type, 22);
             } else {
-                // 解牌结束后重置状态，允许下一次抽牌
-                setTimeout(() => { canDraw = true; initDeckVisual(); }, 3000); 
+                gestureStatus.innerText = "● 宿命已断。清空上方输入框即可立刻开启下一次无缝占卜。";
             }
         }
         type();
     }
 
-    function handleButtonClick() {
-        if (!canDraw) {
-            alert("占卜师正在凝神解牌，请字迹隐去后再试。");
-            return;
-        }
-        canDraw = false;
-        executeDraw();
-    }
-
-    // ==================== MediaPipe 手势轨迹核心修正 ====================
-    function onResults(results) {
-        // PM 视角的产品状态引导：检测到手掌时给用户绿色高亮反馈
-        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-            gestureStatus.innerText = "🟢 已锁定掌纹，向下挥手即可抽牌";
-            gestureStatus.style.color = "#00ffcc";
-            
-            if (!canDraw) return; // 正在占卜中则不触发
-
-            const hand = results.multiHandLandmarks[0];
-            const indexFingerTipY = hand[8].y; // 获取食指尖端的Y坐标
-
-            // 算法调优：增加挥手幅度和防抖判断 (从上往下挥动，差值大于0.08)
-            if (lastY !== 0 && (indexFingerTipY - lastY) > 0.08) {
-                canDraw = false; 
-                gestureStatus.innerText = "⚡ 命运已奉召，正在破空布阵...";
-                executeDraw(); 
-            }
-            lastY = indexFingerTipY;
-        } else {
-            gestureStatus.innerText = "🔮 命运之眼已开，请在摄像头前展露手掌";
-            gestureStatus.style.color = "#e5c158";
-            lastY = 0; 
-        }
-    }
-
-    // 实例化与配置初始化
     const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
     hands.setOptions({ maxNumHands: 1, modelComplexity: 1, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
     hands.onResults(onResults);
 
-    const videoElement = document.getElementById('input_video');
-    const camera = new Camera(videoElement, {
-        onFrame: async () => { 
-            await hands.send({image: videoElement}); 
-        },
-        width: 240, 
-        height: 180
-    });
-    camera.start();
+    preloadTarotImages();
+
+    const camera = new Camera(videoElement, { onFrame: async () => { await hands.send({ image: videoElement }); }, width: 240, height: 180 });
+    camera.start().then(() => { gestureStatus.innerText = "👋 星轨相机已就绪。请大幅横挥手进行发牌..."; initDeckVisual(); }).catch(err => { gestureStatus.innerText = "⚠️ 相机未就绪，请授予浏览器摄像头权限。"; });
 
     window.onload = initDeckVisual;
   </script>
